@@ -1,92 +1,127 @@
 package users
 
 import (
-	"../../../../domain/model"
-	"../../../database_client"
-	//"github.com/stretchr/testify/assert"
-	//"testing"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"github.com/DATA-DOG/go-sqlmock"
-	"regexp"
-	//"github.com/jinzhu/gorm"
+    "testing"
+    "../../../../domain/model"
+    "../models"
+	"github.com/stretchr/testify/require"
+	"fmt"
 )
 
-var (
-	userMysqlRepository UserMysqlRepository
-)
-/*
-func TestUserMysqlRepository_SaveProducto(t *testing.T) {
-	tx := userMysqlRepository.Db.Begin()
-	defer tx.Rollback()
-	var producto model.Producto
-	producto, _ = producto.CreateProducto("Prueba1",3000,"caracteristicas de la prueba")
-	err := userMysqlRepository.SaveProducto(&producto)
+func TestCreateProducto(t *testing.T){
+  var productoTest model.Producto	
+  productoTest,errFactory := productoTest.CreateProducto("ejemplo1", 1552,"caracteristicas ficticias")
+  
+  if  errFactory != nil{
+  	fmt.Println("error with connection:")
+  }
 
-	assert.Nil(t, err)
-	assert.EqualValues(t, producto.Nombre, "Prueba1", "Nombres son diferentes")
-	assert.NotEqual(t, producto.Precio, 3000)
-	assert.NotEqual(t, producto.Caracteristicas, "caracteristicas de la prueba")
-	assert.NotNil(t, producto.Codigo, "codigo no nulo")
+  err := testEntityManager.SaveProducto(&productoTest)
+
+  require.NoError(t,err)
+  require.NotEmpty(t,productoTest.Codigo)
+
 }
-*/
-var _ = Describe("save", func() {
-        var producto *model.Producto
-        var repository *UserMysqlRepository
-	    var mock sqlmock.Sqlmock
-        BeforeEach(func() {
-				var err error
 
-				db, mock, err = sqlmock.New() // mock sql.DB
-				Expect(err).ShouldNot(HaveOccurred())
+func TestReadProducto(t *testing.T){
+  var productoTest =  models.ProductoDb{
+  	Nombre : "ejemplo2",
+  	Precio: 1600,
+  	Caracteristicas : "caracteristicas ficticias",
+  }	
+  
+  testEntityManager.Db.Create(&productoTest)
 
-				repository := &UserMysqlRepository{
-		                Db: database_client.GetDatabaseInstance(),
-	            }
-
-                producto = &model.Producto{
-                        Nombre : "Prueba1",
-                        Precio : 300,
-                        Caracteristicas : "Caracteres",
-                }
-        })
-
-        It("insert", func() {
-                // gorm use query instead of exec
-                // https://github.com/DATA-DOG/go-sqlmock/issues/118
-                const sqlInsert = `
-                                INSERT INTO "Productos" ("nombre","precio","caracteristicas") 
-                                        VALUES ($1,$2,$3) RETURNING "Productos"."codigo"`
-                const codigo = 1
-                mock.ExpectBegin() // begin transaction
-                mock.ExpectQuery(regexp.QuoteMeta(sqlInsert)).
-                        WithArgs(producto.Nombre, producto.Precio, producto.Caracteristicas).
-                        WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(codigo))
-                mock.ExpectCommit() // commit transaction
-
-                Expect(producto.Codigo).Should(BeZero())
-
-                err := repository.SaveProducto(producto)
-                Expect(err).ShouldNot(HaveOccurred())
-
-                Expect(producto.Codigo).Should(BeEquivalentTo(codigo))
-        })
-})
-/*func TestUserMysqlRepository_Get(t *testing.T) {
-
-	tx := userMysqlRepository.Db.Begin()
-	defer tx.Rollback()
-	var user model.User
-	user, _ = user.CreateUser("Franklin", "Carrero", "mauriciocarrero15@gmail.com", "sistemas31")
-	var userDb models.UserDb
-	userDb = users_mapper.UserToUserDb(user)
-	if err := userMysqlRepository.Db.Create(&userDb).Error; err != nil {
-		assert.Fail(t, err.Error())
+  productoGet, errorGet := testEntityManager.GetProducto(productoTest.Codigo)
+	if errorGet != nil {
+		fmt.Printf("server not responding %s", errorGet.Error())
 	}
-	user, err := userMysqlRepository.Get(userDb.ID)
+  
+  require.NoError(t,errorGet)
+  require.NotEmpty(t,productoGet.Codigo)
 
-	assert.Nil(t, err)
-	assert.NotNil(t, user)
-	assert.EqualValues(t, userDb.ID, user.Id)
-	assert.EqualValues(t, "Carrero", user.LastName)
-}*/
+  require.Equal(t,productoGet.Codigo, productoTest.Codigo)
+  require.Equal(t,productoGet.Nombre, productoTest.Nombre)
+  require.Equal(t,productoGet.Precio, productoTest.Precio)
+  require.Equal(t,productoGet.Caracteristicas, productoTest.Caracteristicas)
+}
+
+func TestFindAll(t *testing.T){
+	testEntityManager.Db.Delete(&models.ProductoDb{})
+
+	var productosTests =  []models.ProductoDb{
+		models.ProductoDb{
+		  	Nombre : "ejemplo1",
+		  	Precio: 1600,
+		  	Caracteristicas : "caracteristicas ficticias",
+  		},	
+  		models.ProductoDb{
+		  	Nombre : "ejemplo2",
+		  	Precio: 3400,
+		  	Caracteristicas : "caracteristicas ficticias 2",
+  		},
+  		models.ProductoDb{
+		  	Nombre : "ejemplo3",
+		  	Precio: 2300,
+		  	Caracteristicas : "caracteristicas ficticias 3",
+  		},
+	}
+
+	for _, productoTest := range productosTests{
+		testEntityManager.Db.Create(&productoTest)
+	}
+
+	productosResult, error := testEntityManager.FindAllProductos()
+
+	require.NoError(t,error)
+	require.Equal(t,len(productosTests),len(productosResult))
+}
+
+func TestUpdate(t *testing.T){
+  var productoTest =  models.ProductoDb{
+  	Nombre : "ejemplo4",
+  	Precio: 5500,
+  	Caracteristicas : "caracteristicas ficticias 4",
+  }	
+  
+  testEntityManager.Db.Create(&productoTest)
+
+  var productoUpdate =  model.Producto{
+  	Codigo : productoTest.Codigo,
+  	Nombre : "ejemplo_edit",
+  	Precio: 4500,
+  	Caracteristicas : "caracteristicas ficticias editadas",
+  }
+
+  productoResult, err := testEntityManager.UpdateProducto(productoTest.Codigo,&productoUpdate)
+  
+  require.NoError(t,err)
+  require.NotEmpty(t,productoResult.Nombre)
+  
+  var productoDBResult models.ProductoDb
+  testEntityManager.Db.Find(&productoDBResult, "codigo = ?", productoTest.Codigo)
+
+  require.Equal(t,productoDBResult.Nombre,productoUpdate.Nombre)
+  require.Equal(t,productoDBResult.Precio,productoUpdate.Precio)
+  require.Equal(t,productoDBResult.Caracteristicas,productoUpdate.Caracteristicas)
+}
+
+func TestDelete(t *testing.T){
+  var productoTest =  models.ProductoDb{
+  	Nombre : "ejemplo_delete",
+  	Precio: 5500,
+  	Caracteristicas : "caracteristicas ficticias 4",
+  }	
+  
+  testEntityManager.Db.Create(&productoTest)
+
+  err := testEntityManager.DeleteProducto(productoTest.Codigo)
+
+  require.Empty(t,err)
+  
+  var productoDBResult models.ProductoDb
+  testEntityManager.Db.Find(&productoDBResult, "codigo = ?", productoTest.Codigo)
+  
+  require.Empty(t,productoDBResult)
+
+}
